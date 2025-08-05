@@ -6,12 +6,13 @@ import (
 	"file-store/router"
 	"log"
 	"file-store/model"
+	"fmt"
 )
 
 func main() {
+	fmt.Println("Hello Git")
 	serverConfig := lib.LoadServerConfig()
 	mysql.InitDB(serverConfig)
-	model.AutoMigrate() // 自动建表（只在首次运行时执行一次即可）
 	defer mysql.DB.Close()
 
 	r := router.SetupRoute()
