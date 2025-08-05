@@ -13,132 +13,134 @@ import (
 	"time"
 )
 
-type PrivateInfo struct {
-	AccessToken  string `json:"access_token"`
-	ExpiresIn    string `json:"expires_in"`
-	RefreshToken string `json:"refresh_token"`
-	OpenId       string `json:"openid"`
+type GithubAccessTokenResp struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	Scope       string `json:"scope"`
 }
 
-//登录成功获取的QQ用户信息
-type QUserInfo struct {
-	Nickname    string
-	FigureUrlQQ string `json:"figureurl_qq"`
+type GithubUserInfo struct {
+	ID        int64  `json:"id"`
+	Login     string `json:"login"`
+	Name      string `json:"name"`
+	AvatarUrl string `json:"avatar_url"`
 }
 
-//登录页
+// 登录页
 func Login(c *gin.Context) {
 	c.HTML(http.StatusOK, "login.html", nil)
 }
 
-//处理登录
-func HandlerLogin(c *gin.Context) {
+// 跳转到 GitHub 授权页面
+func HandlerGithubLogin(c *gin.Context) {
 	conf := lib.LoadServerConfig()
-	state := "xxxxxxx"
-	url := "https://graph.qq.com/oauth2.0/authorize?response_type=code&client_id=" + conf.AppId + "&redirect_uri=" + conf.RedirectURI + "&state=" + state
+	state := "xxxxxx" // 可随机生成
 
-	c.Redirect(http.StatusMovedPermanently, url)
+	redirectURI := url.QueryEscape(conf.RedirectURI)
+	authURL := fmt.Sprintf(
+		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user&state=%s",
+		conf.Client_Id, redirectURI, state,
+	)
+
+	c.Redirect(http.StatusFound, authURL)
 }
 
-//获取access_token
-func GetQQToken(c *gin.Context) {
+// GitHub 回调，获取 access_token 并获取用户信息
+func GetGithubToken(c *gin.Context) {
 	conf := lib.LoadServerConfig()
 	code := c.Query("code")
 
-	loginUrl := "https://graph.qq.com/oauth2.0/token?grant_type=authorization_code&client_id=" + conf.AppId + "&client_secret=" + conf.AppKey + "&redirect_uri=" + conf.RedirectURI + "&code=" + code
+	tokenURL := "https://github.com/login/oauth/access_token"
+	data := url.Values{}
+	data.Set("client_id", conf.Client_Id)
+	data.Set("client_secret", conf.Client_Key)
+	data.Set("code", code)
+	fmt.Println("Client_ID =", conf.Client_Id)
+	fmt.Println("Client_Secret =", conf.Client_Key)
 
-	response, err := http.Get(loginUrl)
+	req, err := http.NewRequest("POST", tokenURL, nil)
 	if err != nil {
-		fmt.Println("请求错误", err.Error())
+		c.String(http.StatusInternalServerError, "创建请求失败: %v", err)
 		return
 	}
-	defer response.Body.Close()
+	req.URL.RawQuery = data.Encode()
+	req.Header.Set("Accept", "application/json")
 
-	bs, _ := ioutil.ReadAll(response.Body)
-	body := string(bs)
-	resultMap := util.ConvertToMap(body)
-
-	info := &PrivateInfo{}
-	info.AccessToken = resultMap["access_token"]
-	info.RefreshToken = resultMap["refresh_token"]
-	info.ExpiresIn = resultMap["expires_in"]
-
-	GetOpenId(info, c)
-}
-
-//获取QQ openId
-func GetOpenId(info *PrivateInfo, c *gin.Context) {
-	resp, err := http.Get(fmt.Sprintf("%s?access_token=%s", "https://graph.qq.com/oauth2.0/me", info.AccessToken))
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("GetOpenId Err", err.Error())
+		c.String(http.StatusInternalServerError, "请求失败: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	bs, _ := ioutil.ReadAll(resp.Body)
-	body := string(bs)
-	info.OpenId = body[45:77]
+	var tokenResp GithubAccessTokenResp
+	body, _ := ioutil.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		c.String(http.StatusInternalServerError, "解析 access_token 失败: %v", err)
+		return
+	}
 
-	GetUserInfo(info, c)
+	if tokenResp.AccessToken == "" {
+		c.String(http.StatusInternalServerError, "获取 access_token 失败: %s", string(body))
+		return
+	}
+
+	getGithubUserInfo(tokenResp.AccessToken, c)
 }
 
-//获取QQ用户信息
-func GetUserInfo(info *PrivateInfo, c *gin.Context) {
-	conf := lib.LoadServerConfig()
-	params := url.Values{}
-	params.Add("access_token", info.AccessToken)
-	params.Add("openid", info.OpenId)
-	params.Add("oauth_consumer_key", conf.AppId)
+func getGithubUserInfo(accessToken string, c *gin.Context) {
+	userInfoURL := "https://api.github.com/user"
 
-	uri := fmt.Sprintf("https://graph.qq.com/user/get_user_info?%s", params.Encode())
-	resp, err := http.Get(uri)
+	req, _ := http.NewRequest("GET", userInfoURL, nil)
+	req.Header.Set("Authorization", "token "+ accessToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("GetUserInfo Err:", err.Error())
+		c.String(http.StatusInternalServerError, "获取 GitHub 用户信息失败: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	bs, _ := ioutil.ReadAll(resp.Body)
+	body, _ := ioutil.ReadAll(resp.Body)
+	var user GithubUserInfo
+	if err := json.Unmarshal(body, &user); err != nil {
+		c.String(http.StatusInternalServerError, "解析 GitHub 用户信息失败: %v", err)
+		return
+	}
 
-	LoginSucceed(string(bs), info.OpenId, c)
+	loginSucceedGithub(user, c)
 }
 
-//登录成功 处理登录
-func LoginSucceed(userInfo, openId string, c *gin.Context) {
-	var qUserInfo QUserInfo
-	//将数据转为结构体
-	if err := json.Unmarshal([]byte(userInfo), &qUserInfo); err != nil {
-		fmt.Println("转换json失败", err.Error())
+// 登录成功，处理逻辑
+func loginSucceedGithub(user GithubUserInfo, c *gin.Context) {
+	openId := fmt.Sprintf("github_%d", user.ID)
+	fmt.Println("GitHub OpenID:", openId)
+
+	// 创建 token 并保存
+	token := util.EncodeMd5("token" + string(time.Now().Unix()) + openId)
+	fmt.Println("生成的 token:", token)
+	if err := lib.SetKey(token, openId, 24*3600); err != nil {
+		c.String(http.StatusInternalServerError, "Redis 保存 token 失败: %v", err)
 		return
 	}
 
-	//创建一个token
-	hashToken := util.EncodeMd5("token" + string(time.Now().Unix()) + openId)
-	//存入redis
-	if err := lib.SetKey(hashToken, openId, 24*3600); err != nil {
-		fmt.Println("Redis Set Err:", err.Error())
-		return
-	}
-	//设置cookie
-	c.SetCookie("Token", hashToken, 3600*24, "/", "pyxgo.cn", false, true)
+	c.SetCookie("Token", token, 3600*24, "/", "pyxgo.cn", false, true)
 
-	if ok := model.QueryUserExists(openId); ok { //用户存在直接登录
-		//登录成功重定向到首页
+	if ok := model.QueryUserExists(openId); ok {
 		c.Redirect(http.StatusMovedPermanently, "/cloud/index")
 	} else {
-		model.CreateUser(openId, qUserInfo.Nickname, qUserInfo.FigureUrlQQ)
-		//登录成功重定向到首页
+		model.CreateUser(openId, user.Login, user.AvatarUrl)
 		c.Redirect(http.StatusMovedPermanently, "/cloud/index")
 	}
 }
 
-//退出登录
-func Logout(c *gin.Context)  {
+// 退出登录
+func Logout(c *gin.Context) {
 	token, err := c.Cookie("Token")
 	if err != nil {
 		fmt.Println("cookie", err.Error())
 	}
-
 	if err := lib.DelKey(token); err != nil {
 		fmt.Println("Del Redis Err:", err.Error())
 	}

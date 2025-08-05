@@ -5,11 +5,13 @@ import (
 	"file-store/model/mysql"
 	"file-store/router"
 	"log"
+	"file-store/model"
 )
 
 func main() {
 	serverConfig := lib.LoadServerConfig()
 	mysql.InitDB(serverConfig)
+	model.AutoMigrate() // 自动建表（只在首次运行时执行一次即可）
 	defer mysql.DB.Close()
 
 	r := router.SetupRoute()
@@ -18,7 +20,7 @@ func main() {
 	r.Static("/static", "./static")
 
 
-	if err := r.Run(":80"); err != nil {
-		log.Fatal("服务器启动失败...")
+	if err := r.Run(":8080"); err != nil {
+		log.Fatal( "服务器启动失败...")
 	}
 }

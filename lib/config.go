@@ -24,8 +24,8 @@ type ServerConfig struct {
 	RedisHost       string
 	RedisIndex      string
 	UploadLocation  string
-	AppId           string
-	AppKey          string
+	Client_Id       string
+	Client_Key      string
 	RedirectURI     string
 	AccessKeyID     string
 	AccessKeySecret string
@@ -69,9 +69,9 @@ func LoadServerConfig() ServerConfig {
 		log.Fatal(2, "Fail to get section 'oss': %v", err)
 	}
 
-	qq, err := Cfg.GetSection("qq")
+	github, err := Cfg.GetSection("github")
 	if err != nil {
-		log.Fatal(2, "Fail to get section 'qq': %v", err)
+		log.Fatal(2, "Fail to get section 'github': %v", err)
 	}
 
 	Config := ServerConfig{
@@ -88,9 +88,9 @@ func LoadServerConfig() ServerConfig {
 		RedisHost:       redis.Key("HOST").MustString(""),
 		RedisIndex:      redis.Key("INDEX").MustString(""),
 		UploadLocation:  app.Key("LOCATION").MustString(""),
-		AppId:           qq.Key("APP_ID").MustString(""),
-		AppKey:          qq.Key("APP_KEY").MustString(""),
-		RedirectURI:     qq.Key("REDIRECT_URI").MustString(""),
+		Client_Id:       github.Key("Client_ID").MustString(""),
+		Client_Key:      github.Key("Client_Secret").MustString(""),
+		RedirectURI:     github.Key("REDIRECT_URI").MustString(""),
 		AccessKeyID:     oss.Key("ACCESS_KEY_ID").MustString(""),
 		AccessKeySecret: oss.Key("ACCESS_KEY_SECRET").MustString(""),
 		Endpoint:        oss.Key("END_POINT").MustString(""),

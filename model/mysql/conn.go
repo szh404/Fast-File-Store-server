@@ -10,6 +10,7 @@ import (
 
 var DB *gorm.DB
 
+
 func InitDB(conf lib.ServerConfig) {
 	var err error
 	dbParams := fmt.Sprintf("%v:%v@tcp(%v)/%v?charset=utf8&parseTime=True&loc=Local",
@@ -18,6 +19,7 @@ func InitDB(conf lib.ServerConfig) {
 		conf.Host,
 		conf.DbName,
 	)
+	fmt.Println(dbParams)
 	DB, err = gorm.Open("mysql", dbParams)
 	if err != nil {
 		log.Fatal(2, err)

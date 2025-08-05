@@ -10,8 +10,8 @@ func SetupRoute() *gin.Engine {
 	router := gin.Default()
 
 	router.GET("/", controller.Login)
-	router.GET("/qq_login", controller.HandlerLogin)
-	router.GET("/callbackQQ", controller.GetQQToken)
+	router.GET("/github_login", controller.HandlerGithubLogin)
+	router.GET("/auth/github/callback", controller.GetGithubToken)
 	router.GET("/file/share", controller.SharePass)
 	router.GET("/file/shareDownload", controller.DownloadShareFile)
 

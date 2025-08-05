@@ -15,6 +15,10 @@ type User struct {
 	ImagePath    string
 }
 
+func AutoMigrate() {
+	mysql.DB.AutoMigrate(&User{}, &FileStore{})
+}
+
 //创建用户并新建文件仓库
 func CreateUser(openId, username, image string) {
 	user := User{
