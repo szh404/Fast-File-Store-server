@@ -5,7 +5,6 @@ import (
 	"file-store/model/mysql"
 	"file-store/router"
 	"log"
-	"file-store/model"
 	"fmt"
 )
 

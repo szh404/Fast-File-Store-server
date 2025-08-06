@@ -31,6 +31,9 @@ type ServerConfig struct {
 	AccessKeySecret string
 	Endpoint        string
 	BucketName      string
+	CookieDomain    string
+	CookiePath      string
+	CookieName      string
 }
 
 //加载服务端配置
@@ -73,6 +76,10 @@ func LoadServerConfig() ServerConfig {
 	if err != nil {
 		log.Fatal(2, "Fail to get section 'github': %v", err)
 	}
+	cookie, err := Cfg.GetSection("cookie")
+	if err != nil {
+		log.Fatal(2, "Fail to get section 'cookie': %v", err)
+	}
 
 	Config := ServerConfig{
 		RunMode:         Cfg.Section("").Key("RUN_MODE").MustString("debug"),
@@ -95,6 +102,9 @@ func LoadServerConfig() ServerConfig {
 		AccessKeySecret: oss.Key("ACCESS_KEY_SECRET").MustString(""),
 		Endpoint:        oss.Key("END_POINT").MustString(""),
 		BucketName:      oss.Key("BUCKET_NAME").MustString(""),
+		CookieDomain:    cookie.Key("CookieDomain").MustString(""),
+		CookiePath:      cookie.Key("CookiePath").MustString(""),
+		CookieName:      cookie.Key("CookieName").MustString(""),
 	}
 
 	return Config

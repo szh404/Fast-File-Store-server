@@ -114,18 +114,18 @@ func getGithubUserInfo(accessToken string, c *gin.Context) {
 
 // 登录成功，处理逻辑
 func loginSucceedGithub(user GithubUserInfo, c *gin.Context) {
+	conf := lib.LoadServerConfig()
 	openId := fmt.Sprintf("github_%d", user.ID)
 	fmt.Println("GitHub OpenID:", openId)
 
 	// 创建 token 并保存
 	token := util.EncodeMd5("token" + string(time.Now().Unix()) + openId)
-	fmt.Println("生成的 token:", token)
 	if err := lib.SetKey(token, openId, 24*3600); err != nil {
 		c.String(http.StatusInternalServerError, "Redis 保存 token 失败: %v", err)
 		return
 	}
-
-	c.SetCookie("Token", token, 3600*24, "/", "pyxgo.cn", false, true)
+	// 修改cookie设置
+	c.SetCookie(conf.CookieName, token, 3600*24, conf.CookiePath, "", false, false)
 
 	if ok := model.QueryUserExists(openId); ok {
 		c.Redirect(http.StatusMovedPermanently, "/cloud/index")
@@ -137,14 +137,19 @@ func loginSucceedGithub(user GithubUserInfo, c *gin.Context) {
 
 // 退出登录
 func Logout(c *gin.Context) {
-	token, err := c.Cookie("Token")
+	conf := lib.LoadServerConfig()
+	token, err := c.Cookie(conf.CookieName)
 	if err != nil {
-		fmt.Println("cookie", err.Error())
+		// Cookie 不存在时直接重定向
+        c.SetCookie(conf.CookieName, "", -1, conf.CookiePath, conf.CookieDomain, false, true)
+        c.Redirect(http.StatusFound, "/")
 	}
+	// 删除redis里的token
 	if err := lib.DelKey(token); err != nil {
+		// redis删除失败不影响退出流程，只记录日志
 		fmt.Println("Del Redis Err:", err.Error())
 	}
 
-	c.SetCookie("Token", "", 0, "/", "pyxgo.cn", false, false)
+	c.SetCookie(conf.CookieName, "", -1, conf.CookiePath, conf.CookieDomain, false, true)
 	c.Redirect(http.StatusFound, "/")
 }

@@ -3,7 +3,7 @@ package lib
 import (
 	"fmt"
 	"time"
-
+	"log"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -18,7 +18,7 @@ func init() {
 		Wait:        true,              // 当连接数已满，是否要阻塞等待获取连接。false表示不等待，直接返回错误。
 		IdleTimeout: 200 * time.Second, //最大的空闲连接等待时间，超过此时间后，空闲连接将被关闭
 		Dial: func() (redis.Conn, error) { // 创建链接
-			c, err := redis.Dial("tcp", config.RedisHost)
+			c, err := redis.Dial("tcp", config.RedisHost, redis.DialDatabase(0))
 			if err != nil {
 				return nil, err
 			}
@@ -49,6 +49,14 @@ func GetKey(key string) (string, error) {
 // set expires为0时，表示永久性存储
 func SetKey(key, value interface{}, expires int) error {
 	rds := RedisPool.Get()
+	if rds.Err() != nil {
+		return fmt.Errorf("Redis 连接失败: %v", rds.Err())
+	}
+	info, err := redis.String(rds.Do("INFO"))
+	if err != nil {
+		log.Fatalf("无法获取 Redis INFO: %v", err)
+	}
+	log.Println("Redis INFO:\n", info)
 	defer rds.Close()
 	if expires == 0 {
 		_, err := rds.Do("SET", key, value)
